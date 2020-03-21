@@ -1,0 +1,3 @@
+flask-restful
+pynamodb
+s2sphere
