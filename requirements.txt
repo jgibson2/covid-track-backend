@@ -1,3 +1,4 @@
 flask-restful
+numpy
 pynamodb
 s2sphere

@@ -1,4 +1,6 @@
 import s2sphere
+import numpy as np
+
 from pynamodb.models import Model
 from pynamodb.attributes import NumberAttribute, NumberSetAttribute
 import itertools
@@ -13,6 +15,7 @@ DEFAULT_HOUR_LIMIT = 72
 app = Flask(__name__)
 api = Api(app)
 
+
 class InfectionModel(Model):
     class Meta:
         table_name = 'infections'
@@ -21,25 +24,21 @@ class InfectionModel(Model):
     local_cell = NumberAttribute(range_key=True)
     timestamps = NumberSetAttribute()
 
+
 class InfectionTracker(Resource):
     def __init__(self):
         InfectionModel.create_table(read_capacity_units=1, write_capacity_units=1)
 
 
     def get(self):
-        level = int(request.args.get('level', REGIONAL_LEVEL))
-        print(f'LEVEL: {level}')
         hour_limit = float(request.args.get('hours', DEFAULT_HOUR_LIMIT))
         print(f'HOUR_LIMIT: {hour_limit}')
         cell_id = request.args['id']
         print(f'CELL_ID: {cell_id}')
+        level = s2sphere.CellId(int(cell_id)).level()
+        print(f'LEVEL: {level}')
         data = []
-        if level > REGIONAL_LEVEL:
-            cells = [s2sphere.CellId(int(cell_id)).parent(REGIONAL_LEVEL)]
-        if level < REGIONAL_LEVEL:
-            cells = s2sphere.CellId(int(cell_id)).children(REGIONAL_LEVEL)
-        else:
-            cells = [s2sphere.CellId(int(cell_id))]
+        cells = itertools.chain(map(lambda c: self.level_cell(c, REGIONAL_LEVEL), [cell_id]))
         for cell in cells:
             # get from database
             local_cells = []
@@ -58,22 +57,26 @@ class InfectionTracker(Resource):
         print(f'LEVEL: {level}')
         data = request.get_json().get('data')
         print(f'DATA: {data}')
-        print(f'DATA[0]: {data[0]}')
         timestamps = [ts for cell_id, ts in data]
-        if level > LOCAL_LEVEL:
-            cells = [s2sphere.CellId(int(cell_id)).parent(LOCAL_LEVEL) for cell_id, timestamp in data]
-        if level < LOCAL_LEVEL:
-            cells = itertools.chain([s2sphere.CellId(int(cell_id)).parent(LOCAL_LEVEL).id() for cell_id, timestamp in data])
-        else:
-            cells = [s2sphere.CellId(int(cell_id)) for cell_id, timestamp in data]
+        cells = itertools.chain(map(lambda c: self.level_cell(c, LOCAL_LEVEL), [cell for cell, ts in data]))
         for cell, ts in zip(cells, timestamps):
+            time = int(np.random.normal(ts, 1E5))
             try:
                 im = InfectionModel.get(cell.parent(REGIONAL_LEVEL).id(), cell.id())
-                im.update(actions=[InfectionModel.timestamps.add(ts)])
+                im.update(actions=[InfectionModel.timestamps.add(time)])
             except InfectionModel.DoesNotExist:
-                im = InfectionModel(regional_cell = cell.parent(REGIONAL_LEVEL).id(), local_cell = cell.id(), timestamps = {ts})
+                im = InfectionModel(regional_cell = cell.parent(REGIONAL_LEVEL).id(), local_cell = cell.id(), timestamps = {time})
                 im.save()
         return make_response('OK', 200)
+
+
+    def level_cell(self, cell_id, desired_level):
+        c = s2sphere.CellId(int(cell_id)) 
+        if c.level() > desired_level:
+            c = s2sphere.CellId(int(cell_id)).parent(desired_level)
+        elif c.level() < desired_level:
+            c = list(s2sphere.CellId(int(cell_id)).children(desired_level))
+        return c
 
 
 api.add_resource(InfectionTracker, '/', '/track')
