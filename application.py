@@ -33,9 +33,9 @@ class InfectionTracker(Resource):
     def get(self):
         hour_limit = float(request.args.get('hours', DEFAULT_HOUR_LIMIT))
         print(f'HOUR_LIMIT: {hour_limit}')
-        cell_id = request.args['id']
+        cell_id = request.args['cell_token']
         print(f'CELL_ID: {cell_id}')
-        level = s2sphere.CellId(int(cell_id)).level()
+        level = s2sphere.CellId.from_token(cell_id).level()
         print(f'LEVEL: {level}')
         data = []
         cells = itertools.chain(map(lambda c: self.level_cell(c, REGIONAL_LEVEL), [cell_id]))
@@ -46,7 +46,7 @@ class InfectionTracker(Resource):
             for r in results:
                 local_cells.extend([(r.local_cell, t) for t in r.timestamps])
             # filter timestamps
-            local_cells = [(c,ts) for c,ts in local_cells if datetime.now() - datetime.fromtimestamp(int(ts) / 1000) < timedelta(hours=hour_limit)]
+            local_cells = [{'cell_token': s2sphere.CellId(c).to_token(), 'timestamp': ts} for c,ts in local_cells if datetime.now() - datetime.fromtimestamp(int(ts) / 1000) < timedelta(hours=hour_limit)]
             # add to data
             data.extend(local_cells)
         return {'data': data}
@@ -57,8 +57,8 @@ class InfectionTracker(Resource):
         print(f'LEVEL: {level}')
         data = request.get_json().get('data')
         print(f'DATA: {data}')
-        timestamps = [ts for cell_id, ts in data]
-        cells = itertools.chain(map(lambda c: self.level_cell(c, LOCAL_LEVEL), [cell for cell, ts in data]))
+        timestamps = [d['timestamp'] for d in data]
+        cells = itertools.chain(map(lambda c: self.level_cell(c, LOCAL_LEVEL), [d['cell_token'] for d in data]))
         for cell, ts in zip(cells, timestamps):
             time = int(np.random.normal(ts, 1E5))
             try:
@@ -71,11 +71,11 @@ class InfectionTracker(Resource):
 
 
     def level_cell(self, cell_id, desired_level):
-        c = s2sphere.CellId(int(cell_id)) 
+        c = s2sphere.CellId.from_token(cell_id) 
         if c.level() > desired_level:
-            c = s2sphere.CellId(int(cell_id)).parent(desired_level)
+            c = s2sphere.CellId.from_token(cell_id).parent(desired_level)
         elif c.level() < desired_level:
-            c = list(s2sphere.CellId(int(cell_id)).children(desired_level))
+            c = list(s2sphere.CellId.from_token(cell_id).children(desired_level))
         return c
 
 
