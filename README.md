@@ -8,7 +8,7 @@ Example POST:
 {
 	"data" : [
 			{"cell_token": "87df3528f", "timestamp": 1586242911000},
-      {"cell_token": "87df3528f", "timestamp": 1586242991000}
+      			{"cell_token": "87df3528f", "timestamp": 1586242991000}
 		]
 }
 ```
