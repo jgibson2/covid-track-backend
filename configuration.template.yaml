@@ -1,0 +1,13 @@
+s2:
+    local_level: 18
+    regional_level: 13
+time:
+    hour_limit: 72
+flask:
+    secret_key: 9UVVYBiB00
+    host: localhost
+    port: 5001
+    debug: false
+aws:
+    access_key_id: XXXXXXXXXXXXXXX
+    secret_access_key: XXXXXXXXXXXXXXX

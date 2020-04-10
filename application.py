@@ -1,5 +1,7 @@
+import yaml
 import s2sphere
 import numpy as np
+from waitress import serve
 
 from pynamodb.models import Model
 from pynamodb.attributes import NumberAttribute, NumberSetAttribute
@@ -8,18 +10,27 @@ from datetime import datetime, timedelta
 from flask import Flask, request, make_response
 from flask_restful import Resource, Api
 
-REGIONAL_LEVEL = 10
-LOCAL_LEVEL = 16
-DEFAULT_HOUR_LIMIT = 72
+
+config = yaml.safe_load(open('./configuration.yaml'))
+
+
+REGIONAL_LEVEL = config['s2']['regional_level']
+LOCAL_LEVEL = config['s2']['local_level']
+DEFAULT_HOUR_LIMIT = config['time']['hour_limit']
 
 app = Flask(__name__)
+app.secret_key = config['flask']['secret_key']
 api = Api(app)
 
 
 class InfectionModel(Model):
     class Meta:
         table_name = 'infections'
-        host = "http://localhost:8000"
+        if 'aws' in config:
+            aws_access_key_id = config['aws']['access_key_id']
+            aws_secret_access_key = config['aws']['secret_access_key']
+        else:
+            host = "http://localhost:8000"
     regional_cell = NumberAttribute(hash_key=True)
     local_cell = NumberAttribute(range_key=True)
     timestamps = NumberSetAttribute()
@@ -27,7 +38,8 @@ class InfectionModel(Model):
 
 class InfectionTracker(Resource):
     def __init__(self):
-        InfectionModel.create_table(read_capacity_units=1, write_capacity_units=1)
+        if not InfectionModel.exists():
+            InfectionModel.create_table(read_capacity_units=1, write_capacity_units=1)
 
 
     def get(self):
@@ -58,7 +70,7 @@ class InfectionTracker(Resource):
         data = request.get_json().get('data')
         print(f'DATA: {data}')
         timestamps = [d['timestamp'] for d in data]
-        cells = itertools.chain(map(lambda c: self.level_cell(c, LOCAL_LEVEL), [d['cell_token'] for d in data]))
+        cells = itertools.chain.from_iterable(map(lambda c: self.level_cell(c, LOCAL_LEVEL), [d['cell_token'] for d in data]))
         for cell, ts in zip(cells, timestamps):
             time = int(np.random.normal(ts, 1E5))
             try:
@@ -82,4 +94,9 @@ class InfectionTracker(Resource):
 api.add_resource(InfectionTracker, '/', '/track')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # app.run(debug=True)
+    if config['flask']['debug'] == True:
+        app.run( host=config['flask']['host'], port=int(config['flask']['port']), debug=True)
+    else:
+        serve(app, host=config['flask']['host'], port=int(config['flask']['port']))
+
