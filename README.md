@@ -1,7 +1,7 @@
 # Track COVID-19 Cases Through User-Supplied Anonymized Data
 
 Example GET:
-`http://142.93.253.235/track?cell_token=87df3528f&hour_limit=72`
+`http://142.93.253.235/track?cell_token=87df3528f&hours=72`
 
 Example POST:
 ```json
